@@ -1,0 +1,200 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Advanced Workout Tracker</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: Arial; margin: 20px; background: #f4f4f4; }
+    h1, h2 { text-align: center; }
+    form, .filters, .dashboard, .charts, .wod-section {
+      max-width: 800px; margin: auto; margin-bottom: 30px;
+    }
+    input, select, button {
+      padding: 10px; font-size: 16px; margin: 5px 0; width: 100%;
+    }
+    table { width: 100%; border-collapse: collapse; background: white; }
+    th, td { padding: 8px; border: 1px solid #ccc; text-align: center; }
+    .highlight { background: #d1ffd1; }
+    canvas { background: white; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <h1>Advanced Workout Tracker</h1>
+
+  <!-- Workout Input Form -->
+  <form id="workoutForm">
+    <input type="text" id="exercise" placeholder="Exercise Name" required />
+    <input type="number" id="sets" placeholder="Sets" required />
+    <input type="number" id="reps" placeholder="Reps" required />
+    <input type="number" id="weight" placeholder="Weight (lbs)" required />
+    <input type="date" id="date" required />
+    <button type="submit">Add Workout</button>
+  </form>
+
+  <!-- Filter Section -->
+  <div class="filters">
+    <h2>Filter Workouts by Date</h2>
+    <input type="date" id="filterDate" />
+    <button onclick="filterByDate()">Filter</button>
+    <button onclick="resetFilter()">Reset</button>
+  </div>
+
+  <!-- PR Dashboard -->
+  <div class="dashboard">
+    <h2>PR Summary</h2>
+    <div id="prSummary"></div>
+  </div>
+
+  <!-- Workout Table -->
+  <div>
+    <h2>Workout History</h2>
+    <table id="workoutTable">
+      <thead>
+        <tr>
+          <th>Exercise</th><th>Sets</th><th>Reps</th><th>Weight</th><th>Date</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <!-- Charts -->
+  <div class="charts">
+    <h2>Progress Charts</h2>
+    <canvas id="progressChart" width="400" height="200"></canvas>
+  </div>
+
+  <!-- WOD Generator -->
+  <div class="wod-section">
+    <h2>Custom WOD Generator</h2>
+    <select id="difficulty">
+      <option value="">Select Difficulty</option>
+      <option value="Easy">Easy</option>
+      <option value="Moderate">Moderate</option>
+      <option value="Hard">Hard</option>
+    </select>
+    <select id="equipment">
+      <option value="">Select Equipment</option>
+      <option value="Bodyweight">Bodyweight</option>
+      <option value="Dumbbell">Dumbbell</option>
+      <option value="Barbell">Barbell</option>
+    </select>
+    <button onclick="generateWOD()">Generate WOD</button>
+    <div id="wodDisplay" style="margin-top:15px; font-weight:bold;"></div>
+  </div>
+
+<script>
+let workouts = JSON.parse(localStorage.getItem('workouts')) || [];
+const tableBody = document.querySelector('#workoutTable tbody');
+const prSummary = document.getElementById('prSummary');
+const ctx = document.getElementById('progressChart').getContext('2d');
+
+document.getElementById('workoutForm').addEventListener('submit', function(e) {
+  e.preventDefault();
+  const workout = {
+    exercise: document.getElementById('exercise').value,
+    sets: +document.getElementById('sets').value,
+    reps: +document.getElementById('reps').value,
+    weight: +document.getElementById('weight').value,
+    date: document.getElementById('date').value
+  };
+  workouts.push(workout);
+  localStorage.setItem('workouts', JSON.stringify(workouts));
+  render();
+  this.reset();
+});
+
+function render() {
+  tableBody.innerHTML = '';
+  workouts.forEach(w => {
+    const row = document.createElement('tr');
+    row.innerHTML = `<td>${w.exercise}</td><td>${w.sets}</td><td>${w.reps}</td><td>${w.weight}</td><td>${w.date}</td>`;
+    tableBody.appendChild(row);
+  });
+  updatePRs();
+  drawChart();
+}
+
+function filterByDate() {
+  const date = document.getElementById('filterDate').value;
+  const filtered = workouts.filter(w => w.date === date);
+  tableBody.innerHTML = '';
+  filtered.forEach(w => {
+    const row = document.createElement('tr');
+    row.innerHTML = `<td>${w.exercise}</td><td>${w.sets}</td><td>${w.reps}</td><td>${w.weight}</td><td>${w.date}</td>`;
+    tableBody.appendChild(row);
+  });
+}
+
+function resetFilter() {
+  render();
+}
+
+function updatePRs() {
+  const prMap = {};
+  workouts.forEach(w => {
+    if (!prMap[w.exercise] || w.weight > prMap[w.exercise]) {
+      prMap[w.exercise] = w.weight;
+    }
+  });
+  prSummary.innerHTML = Object.entries(prMap).map(
+    ([ex, wt]) => `<p><strong>${ex}</strong>: ${wt} lbs</p>`
+  ).join('');
+}
+
+function drawChart() {
+  if (!workouts.length) return;
+  const ex = workouts[workouts.length - 1].exercise;
+  const data = workouts.filter(w => w.exercise === ex).map(w => w.weight);
+  const labels = workouts.filter(w => w.exercise === ex).map(w => w.date);
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: `${ex} Progress`,
+        data: data,
+        borderColor: 'blue',
+        borderWidth: 2,
+        fill: false
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false
+    }
+  });
+}
+
+function generateWOD() {
+  const difficulty = document.getElementById('difficulty').value;
+  const equipment = document.getElementById('equipment').value;
+  const wodList = {
+    Easy: {
+      Bodyweight: ["10 push-ups, 15 squats, 20 sit-ups", "5 rounds of 200m run + 10 lunges"],
+      Dumbbell: ["15 DB deadlifts, 10 DB thrusters", "12 min AMRAP: 8 DB cleans, 10 push-ups"],
+      Barbell: ["3 rounds: 5 power cleans, 10 air squats"]
+    },
+    Moderate: {
+      Bodyweight: ["10 rounds: 10 push-ups, 10 squats", "AMRAP 15 min: 20 sit-ups, 15 jump squats"],
+      Dumbbell: ["21-15-9: DB snatch and burpees", "3 rounds: 10 DB press, 20 step-ups"],
+      Barbell: ["5x5 back squats, 3x10 bench press"]
+    },
+    Hard: {
+      Bodyweight: ["100 burpees for time", "20 min EMOM: 10 push-ups + 15 squats"],
+      Dumbbell: ["4 rounds: 20 DB snatch, 15 goblet squats, 10 burpee over DB"],
+      Barbell: ["Fran: 21-15-9 thrusters and pull-ups", "Heavy deadlift ladder + push jerks"]
+    }
+  };
+  let wod = (wodList[difficulty] && wodList[difficulty][equipment]) || ["Please select difficulty and equipment"];
+  document.getElementById('wodDisplay').innerText = wod[Math.floor(Math.random() * wod.length)];
+}
+
+// Initial render
+render();
+</script>
+</body>
+</html>
