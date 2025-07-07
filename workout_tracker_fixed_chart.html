@@ -1,0 +1,166 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Workout Tracker</title>
+  <link rel="icon" href="favicon.ico" type="image/x-icon">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      transition: background 0.3s, color 0.3s;
+    }
+    body.dark {
+      background: #111;
+      color: #eee;
+    }
+    .container {
+      max-width: 800px;
+      margin: auto;
+    }
+    input, select, button {
+      padding: 10px;
+      font-size: 16px;
+      margin: 5px 0;
+      width: 100%;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    th, td {
+      padding: 8px;
+      border: 1px solid #ccc;
+      text-align: center;
+    }
+    body.dark table {
+      background: #222;
+      color: #ddd;
+    }
+    canvas {
+      max-height: 400px;
+      display: block;
+      margin: 0 auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Workout Tracker</h1>
+    <label><input type="checkbox" id="darkModeToggle"> Dark Mode</label>
+    <form id="workoutForm">
+      <input type="text" id="exercise" placeholder="Exercise Name" required />
+      <input type="number" id="sets" placeholder="Sets" required />
+      <input type="number" id="reps" placeholder="Reps" required />
+      <input type="number" id="weight" placeholder="Weight (lbs)" required />
+      <input type="date" id="date" />
+      <button type="submit">Add Workout</button>
+    </form>
+    <button onclick="exportToCSV()">Export to CSV</button>
+
+    <h3>Workout History</h3>
+    <table id="workoutTable">
+      <thead>
+        <tr>
+          <th>Exercise</th>
+          <th>Sets</th>
+          <th>Reps</th>
+          <th>Weight</th>
+          <th>Date</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <h3>Progress Charts</h3>
+    <canvas id="progressChart"></canvas>
+  </div>
+
+  <script>
+    const form = document.getElementById('workoutForm');
+    const tableBody = document.querySelector('#workoutTable tbody');
+    const chartCanvas = document.getElementById('progressChart');
+    const darkModeToggle = document.getElementById('darkModeToggle');
+    let workoutData = JSON.parse(localStorage.getItem('workouts')) || [];
+
+    function renderTable() {
+      tableBody.innerHTML = '';
+      workoutData.forEach(entry => {
+        const row = document.createElement('tr');
+        ['exercise', 'sets', 'reps', 'weight', 'date'].forEach(key => {
+          const cell = document.createElement('td');
+          cell.textContent = entry[key];
+          row.appendChild(cell);
+        });
+        tableBody.appendChild(row);
+      });
+    }
+
+    function renderChart() {
+      const ctx = chartCanvas.getContext('2d');
+      if (window.myChart) window.myChart.destroy();
+
+      const labels = [];
+      const weights = [];
+      workoutData.forEach(entry => {
+        labels.push(`${entry.exercise} (${entry.date})`);
+        weights.push(entry.weight);
+      });
+
+      window.myChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Weight (lbs)',
+            data: weights,
+            backgroundColor: 'rgba(54, 162, 235, 0.7)'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false
+        }
+      });
+    }
+
+    form.onsubmit = e => {
+      e.preventDefault();
+      const newWorkout = {
+        exercise: document.getElementById('exercise').value,
+        sets: +document.getElementById('sets').value,
+        reps: +document.getElementById('reps').value,
+        weight: +document.getElementById('weight').value,
+        date: document.getElementById('date').value || new Date().toISOString().split('T')[0]
+      };
+      workoutData.push(newWorkout);
+      localStorage.setItem('workouts', JSON.stringify(workoutData));
+      renderTable();
+      renderChart();
+      form.reset();
+    };
+
+    function exportToCSV() {
+      const rows = [['Exercise', 'Sets', 'Reps', 'Weight', 'Date'], ...workoutData.map(w => [w.exercise, w.sets, w.reps, w.weight, w.date])];
+      const csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n");
+      const link = document.createElement("a");
+      link.setAttribute("href", encodeURI(csvContent));
+      link.setAttribute("download", "workout_data.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    darkModeToggle.addEventListener('change', () => {
+      document.body.classList.toggle('dark', darkModeToggle.checked);
+    });
+
+    renderTable();
+    renderChart();
+  </script>
+</body>
+</html>
