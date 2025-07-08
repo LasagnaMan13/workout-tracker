@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>LasagnaLifts Tracker</title>
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(to right, #1f1c2c, #928dab);
+      color: #fff;
+      transition: background 0.3s, color 0.3s;
+    }
+
+    body.dark {
+      background: linear-gradient(to right, #000000, #434343);
+      color: #eee;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: auto;
+      padding: 20px;
+    }
+
+    h1, h2 {
+      text-align: center;
+      font-weight: 600;
+      margin-bottom: 20px;
+    }
+
+    .section {
+      background-color: rgba(255, 255, 255, 0.1);
+      padding: 20px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    }
+
+    label, input, select, button {
+      display: block;
+      width: 100%;
+      margin-top: 10px;
+      padding: 12px;
+      font-size: 16px;
+      border: none;
+      border-radius: 8px;
+    }
+
+    input, select {
+      background: #f8f9fa;
+      color: #000;
+    }
+
+    button {
+      background-color: #ff6b6b;
+      color: #fff;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+
+    button:hover {
+      background-color: #ff4757;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+
+    th, td {
+      border: 1px solid #ddd;
+      padding: 10px;
+      text-align: center;
+      background-color: rgba(255,255,255,0.1);
+    }
+
+    canvas {
+      background-color: white;
+      border-radius: 8px;
+      margin-top: 20px;
+    }
+
+    @media (max-width: 600px) {
+      body {
+        font-size: 15px;
+      }
+
+      .container {
+        padding: 10px;
+      }
+
+      label, input, select, button {
+        font-size: 14px;
+        padding: 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>LasagnaLifts Tracker</h1>
+    <div class="section">
+      <label><input type="checkbox" id="darkModeToggle"> Toggle Dark Mode</label>
+      <input type="text" id="exercise" placeholder="Exercise Name" />
+      <input type="number" id="sets" placeholder="Sets" />
+      <input type="number" id="reps" placeholder="Reps" />
+      <input type="number" id="weight" placeholder="Weight (lbs)" />
+      <input type="date" id="date" />
+      <button onclick="addWorkout()">Add Workout</button>
+      <button onclick="exportCSV()">Export to CSV</button>
+    </div>
+
+    <div class="section">
+      <h2>Workout History</h2>
+      <input type="text" id="filterExercise" placeholder="Filter by Exercise" />
+      <input type="date" id="startDate" />
+      <input type="date" id="endDate" />
+      <button onclick="applyFilters()">Apply Filters</button>
+      <table id="workoutTable">
+        <thead>
+          <tr><th>Exercise</th><th>Sets</th><th>Reps</th><th>Weight</th><th>Date</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="section">
+      <h2>Progress Chart</h2>
+      <canvas id="progressChart" width="400" height="200"></canvas>
+    </div>
+  </div>
+
+  <script>
+    const workoutTableBody = document.querySelector('#workoutTable tbody');
+    const progressChart = document.getElementById('progressChart').getContext('2d');
+    let chart;
+
+    document.getElementById('darkModeToggle').addEventListener('change', function() {
+      document.body.classList.toggle('dark');
+    });
+
+    function addWorkout() {
+      const exercise = document.getElementById('exercise').value;
+      const sets = document.getElementById('sets').value;
+      const reps = document.getElementById('reps').value;
+      const weight = document.getElementById('weight').value;
+      const date = document.getElementById('date').value;
+
+      if (exercise && sets && reps && weight && date) {
+        const row = workoutTableBody.insertRow();
+        [exercise, sets, reps, weight, date].forEach(val => {
+          const cell = row.insertCell();
+          cell.textContent = val;
+        });
+        updateChart();
+        clearInputs();
+      }
+    }
+
+    function clearInputs() {
+      ['exercise','sets','reps','weight','date'].forEach(id => document.getElementById(id).value = '');
+    }
+
+    function updateChart() {
+      const rows = Array.from(workoutTableBody.rows);
+      const dates = rows.map(r => r.cells[4].textContent);
+      const weights = rows.map(r => parseFloat(r.cells[3].textContent));
+
+      if (chart) chart.destroy();
+      chart = new Chart(progressChart, {
+        type: 'line',
+        data: {
+          labels: dates,
+          datasets: [{
+            label: 'Weight Lifted',
+            data: weights,
+            backgroundColor: 'rgba(255, 107, 107, 0.2)',
+            borderColor: '#ff6b6b',
+            borderWidth: 2,
+            tension: 0.2
+          }]
+        },
+        options: {
+          scales: {
+            y: {
+              beginAtZero: true
+            }
+          }
+        }
+      });
+    }
+
+    function exportCSV() {
+      let csv = "Exercise,Sets,Reps,Weight,Date\n";
+      Array.from(workoutTableBody.rows).forEach(row => {
+        csv += Array.from(row.cells).map(cell => cell.textContent).join(",") + "\n";
+      });
+
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = "workout_data.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function applyFilters() {
+      const exerciseFilter = document.getElementById("filterExercise").value.toLowerCase();
+      const startDate = new Date(document.getElementById("startDate").value);
+      const endDate = new Date(document.getElementById("endDate").value);
+
+      Array.from(workoutTableBody.rows).forEach(row => {
+        const exercise = row.cells[0].textContent.toLowerCase();
+        const rowDate = new Date(row.cells[4].textContent);
+
+        const matchesExercise = !exerciseFilter || exercise.includes(exerciseFilter);
+        const inDateRange = (!startDate || rowDate >= startDate) && (!endDate || rowDate <= endDate);
+
+        row.style.display = matchesExercise && inDateRange ? "" : "none";
+      });
+    }
+  </script>
+</body>
+</html>
