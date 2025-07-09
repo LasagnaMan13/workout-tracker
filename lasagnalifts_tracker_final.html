@@ -1,0 +1,243 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>LasagnaLifts Tracker</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(to bottom, #0f0c29, #302b63, #24243e);
+      color: #fff;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 800px;
+      margin: 2rem auto;
+      padding: 1.5rem;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.25);
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 1rem;
+    }
+    label, select, input[type="number"], input[type="text"], input[type="date"] {
+      display: block;
+      width: 100%;
+      margin: 0.5rem 0;
+      padding: 0.5rem;
+      border: none;
+      border-radius: 6px;
+      font-size: 1rem;
+    }
+    button {
+      width: 100%;
+      padding: 0.7rem;
+      margin-top: 0.5rem;
+      font-size: 1rem;
+      background-color: #ff5f5f;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #e04343;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+      background-color: rgba(255,255,255,0.05);
+    }
+    th, td {
+      padding: 0.5rem;
+      text-align: center;
+      border-bottom: 1px solid #555;
+    }
+    .pr-star {
+      color: gold;
+      font-weight: bold;
+    }
+    .sets-container {
+      margin-bottom: 1rem;
+    }
+    canvas {
+      background: white;
+      border-radius: 8px;
+      padding: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>LasagnaLifts Tracker</h1>
+    <form id="workoutForm">
+      <label for="exercise">Exercise Name</label>
+      <input type="text" id="exercise" required />
+      <div id="setsContainer" class="sets-container">
+        <div class="set-group">
+          <input type="number" placeholder="Sets" class="sets" required />
+          <input type="number" placeholder="Reps" class="reps" required />
+          <input type="number" placeholder="Weight (lbs)" class="weight" required />
+        </div>
+      </div>
+      <button type="button" onclick="addSet()">Add Set</button>
+      <label for="date">Date</label>
+      <input type="date" id="date" required />
+      <button type="submit">Add Workout</button>
+      <button type="button" onclick="exportCSV()">Export to CSV</button>
+    </form>
+
+    <h2>Workout History</h2>
+    <label for="filterExercise">Filter by Exercise</label>
+    <select id="filterExercise"><option value="">All</option></select>
+    <label for="filterStart">From</label>
+    <input type="date" id="filterStart"/>
+    <label for="filterEnd">To</label>
+    <input type="date" id="filterEnd"/>
+    <button onclick="applyFilters()">Apply Filters</button>
+    <table id="historyTable">
+      <thead>
+        <tr><th>Exercise</th><th>Sets</th><th>Reps</th><th>Weight</th><th>Date</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <h2>Progress Chart</h2>
+    <canvas id="progressChart" height="200"></canvas>
+  </div>
+
+  <script>
+    let workoutData = JSON.parse(localStorage.getItem("workouts")) || [];
+    const form = document.getElementById("workoutForm");
+    const historyTable = document.querySelector("#historyTable tbody");
+    const filterExercise = document.getElementById("filterExercise");
+    const chartCtx = document.getElementById("progressChart").getContext("2d");
+    let progressChart;
+
+    function addSet() {
+      const container = document.createElement("div");
+      container.className = "set-group";
+      container.innerHTML = \`
+        <input type="number" placeholder="Sets" class="sets" required />
+        <input type="number" placeholder="Reps" class="reps" required />
+        <input type="number" placeholder="Weight (lbs)" class="weight" required />
+      \`;
+      document.getElementById("setsContainer").appendChild(container);
+    }
+
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      const exercise = document.getElementById("exercise").value;
+      const date = document.getElementById("date").value;
+      const sets = [...document.querySelectorAll(".set-group")].map(group => ({
+        sets: +group.querySelector(".sets").value,
+        reps: +group.querySelector(".reps").value,
+        weight: +group.querySelector(".weight").value,
+      }));
+      sets.forEach(set => {
+        workoutData.push({ exercise, ...set, date });
+      });
+      localStorage.setItem("workouts", JSON.stringify(workoutData));
+      form.reset();
+      document.getElementById("setsContainer").innerHTML = \`
+        <div class="set-group">
+          <input type="number" placeholder="Sets" class="sets" required />
+          <input type="number" placeholder="Reps" class="reps" required />
+          <input type="number" placeholder="Weight (lbs)" class="weight" required />
+        </div>\`;
+      render();
+    };
+
+    function render() {
+      historyTable.innerHTML = "";
+      const filtered = applyCurrentFilters();
+      const prs = {};
+      filtered.forEach(entry => {
+        if (!prs[entry.exercise] || entry.weight > prs[entry.exercise].weight) {
+          prs[entry.exercise] = { weight: entry.weight, reps: entry.reps };
+        }
+      });
+      filtered.forEach(entry => {
+        const isPR = prs[entry.exercise].weight === entry.weight && prs[entry.exercise].reps === entry.reps;
+        const row = historyTable.insertRow();
+        row.innerHTML = \`
+          <td>\${entry.exercise}</td>
+          <td>\${entry.sets}</td>
+          <td>\${entry.reps}</td>
+          <td>\${entry.weight} \${isPR ? '<span class="pr-star">★</span>' : ''}</td>
+          <td>\${entry.date}</td>
+        \`;
+      });
+      updateExerciseDropdown();
+      updateChart(filtered);
+    }
+
+    function updateExerciseDropdown() {
+      const unique = [...new Set(workoutData.map(w => w.exercise))];
+      filterExercise.innerHTML = '<option value="">All</option>' + unique.map(e => \`<option value="\${e}">\${e}</option>\`).join('');
+    }
+
+    function applyCurrentFilters() {
+      const ex = filterExercise.value;
+      const start = document.getElementById("filterStart").value;
+      const end = document.getElementById("filterEnd").value;
+      return workoutData.filter(w => 
+        (!ex || w.exercise === ex) &&
+        (!start || w.date >= start) &&
+        (!end || w.date <= end)
+      );
+    }
+
+    function applyFilters() {
+      render();
+    }
+
+    function updateChart(data) {
+      const sorted = [...data].sort((a, b) => a.date.localeCompare(b.date));
+      const labels = sorted.map(w => w.date + " (" + w.exercise + ")");
+      const weights = sorted.map(w => w.weight);
+      if (progressChart) progressChart.destroy();
+      progressChart = new Chart(chartCtx, {
+        type: "line",
+        data: {
+          labels,
+          datasets: [{
+            label: "Weight",
+            data: weights,
+            borderColor: "#ff5f5f",
+            fill: false,
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: false }
+          }
+        }
+      });
+    }
+
+    function exportCSV() {
+      const csv = ["Exercise,Sets,Reps,Weight,Date"];
+      workoutData.forEach(w => {
+        csv.push(\`\${w.exercise},\${w.sets},\${w.reps},\${w.weight},\${w.date}\`);
+      });
+      const blob = new Blob([csv.join("\n")], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "workouts.csv";
+      a.click();
+    }
+
+    render();
+  </script>
+</body>
+</html>
