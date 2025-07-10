@@ -1,0 +1,283 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>LasagnaLifts Tracker</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #121212;
+      color: #fff;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+      font-size: 2em;
+    }
+    .card {
+      background-color: #222;
+      padding: 20px;
+      margin-bottom: 20px;
+      border-radius: 12px;
+      box-shadow: 0 0 10px rgba(255, 165, 0, 0.2);
+    }
+    label {
+      display: block;
+      margin-top: 10px;
+    }
+    input, select, button {
+      width: 100%;
+      padding: 10px;
+      margin-top: 5px;
+      border-radius: 6px;
+      border: none;
+      font-size: 1em;
+    }
+    button {
+      margin-top: 15px;
+      cursor: pointer;
+    }
+    .primary-btn {
+      background-color: #f05a28;
+      color: white;
+    }
+    .secondary-btn {
+      background-color: #444;
+      color: white;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+    }
+    th, td {
+      padding: 8px;
+      text-align: center;
+      border-bottom: 1px solid #444;
+    }
+    th {
+      background-color: #333;
+    }
+    .pr-star {
+      color: gold;
+      font-size: 1.2em;
+    }
+    @media screen and (max-width: 600px) {
+      table, thead, tbody, th, td, tr {
+        display: block;
+      }
+      th {
+        display: none;
+      }
+      td {
+        position: relative;
+        padding-left: 50%;
+        text-align: left;
+      }
+      td::before {
+        content: attr(data-label);
+        position: absolute;
+        left: 0;
+        padding-left: 10px;
+        font-weight: bold;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>LasagnaLifts Tracker</h1>
+    <div class="card">
+      <label>Exercise Name <input id="exercise" /></label>
+      <div id="setsContainer">
+        <label>Sets <input type="number" class="setInput" placeholder="Sets" /></label>
+        <label>Reps <input type="number" class="repInput" placeholder="Reps" /></label>
+        <label>Weight (lbs) <input type="number" class="weightInput" placeholder="Weight (lbs)" /></label>
+      </div>
+      <button class="secondary-btn" onclick="addSet()">Add Set</button>
+      <label>Date <input type="date" id="date" /></label>
+      <button class="primary-btn" onclick="addWorkout()">Add Workout</button>
+      <button class="secondary-btn" onclick="exportToCSV()">Export to CSV</button>
+    </div>
+
+    <div class="card">
+      <h3>Workout History</h3>
+      <label>Filter by Exercise <input id="filterExercise" list="exerciseList"/></label>
+      <label>From <input type="date" id="fromDate" /></label>
+      <label>To <input type="date" id="toDate" /></label>
+      <button class="primary-btn" onclick="applyFilters()">Apply Filters</button>
+      <datalist id="exerciseList"></datalist>
+      <table id="historyTable">
+        <thead>
+          <tr>
+            <th>Exercise</th>
+            <th>Sets</th>
+            <th>Reps</th>
+            <th>Weight</th>
+            <th>Date</th>
+            <th>PR</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>Progress Chart</h3>
+      <canvas id="progressChart"></canvas>
+    </div>
+  </div>
+
+  <script>
+    let history = JSON.parse(localStorage.getItem("workoutHistory") || "[]");
+    const prMap = {};
+
+    function updateExerciseList() {
+      const uniqueExercises = [...new Set(history.map(w => w.exercise))];
+      const datalist = document.getElementById("exerciseList");
+      datalist.innerHTML = "";
+      uniqueExercises.forEach(ex => {
+        const opt = document.createElement("option");
+        opt.value = ex;
+        datalist.appendChild(opt);
+      });
+    }
+
+    function addSet() {
+      const container = document.getElementById("setsContainer");
+      container.insertAdjacentHTML("beforeend", `
+        <label>Sets <input type="number" class="setInput" placeholder="Sets" /></label>
+        <label>Reps <input type="number" class="repInput" placeholder="Reps" /></label>
+        <label>Weight (lbs) <input type="number" class="weightInput" placeholder="Weight (lbs)" /></label>
+      `);
+    }
+
+    function addWorkout() {
+      const exercise = document.getElementById("exercise").value.trim();
+      const date = document.getElementById("date").value;
+      const sets = Array.from(document.querySelectorAll(".setInput")).map(i => i.value);
+      const reps = Array.from(document.querySelectorAll(".repInput")).map(i => i.value);
+      const weights = Array.from(document.querySelectorAll(".weightInput")).map(i => i.value);
+
+      for (let i = 0; i < sets.length; i++) {
+        const entry = {
+          exercise, sets: sets[i], reps: reps[i], weight: weights[i], date
+        };
+        history.push(entry);
+
+        const key = `${exercise}`;
+        if (!prMap[key] || weights[i] > prMap[key].weight) {
+          prMap[key] = entry;
+        }
+      }
+
+      localStorage.setItem("workoutHistory", JSON.stringify(history));
+      renderTable();
+      renderChart();
+      updateExerciseList();
+    }
+
+    function renderTable(filterEx = "", from = "", to = "") {
+      const tbody = document.querySelector("#historyTable tbody");
+      tbody.innerHTML = "";
+      history
+        .filter((w, i) =>
+          (!filterEx || w.exercise === filterEx) &&
+          (!from || new Date(w.date) >= new Date(from)) &&
+          (!to || new Date(w.date) <= new Date(to))
+        )
+        .forEach((w, i) => {
+          const isPR = prMap[w.exercise] &&
+            +w.weight === +prMap[w.exercise].weight &&
+            +w.reps === +prMap[w.exercise].reps;
+          tbody.insertAdjacentHTML("beforeend", `
+            <tr>
+              <td>${w.exercise}</td>
+              <td>${w.sets}</td>
+              <td>${w.reps}</td>
+              <td>${w.weight}</td>
+              <td>${w.date}</td>
+              <td>${isPR ? '⭐' : ''}</td>
+              <td><button onclick="deleteWorkout(${i})">🗑️</button></td>
+            </tr>
+          `);
+        });
+    }
+
+    function deleteWorkout(index) {
+      history.splice(index, 1);
+      localStorage.setItem("workoutHistory", JSON.stringify(history));
+      renderTable();
+      renderChart();
+      updateExerciseList();
+    }
+
+    function renderChart() {
+      const ctx = document.getElementById("progressChart").getContext("2d");
+      const dataMap = {};
+
+      history.forEach(w => {
+        if (!dataMap[w.exercise]) dataMap[w.exercise] = [];
+        dataMap[w.exercise].push({ x: new Date(w.date), y: +w.weight });
+      });
+
+      if (window.chart) window.chart.destroy();
+
+      window.chart = new Chart(ctx, {
+        type: "line",
+        data: {
+          datasets: Object.entries(dataMap).map(([label, data]) => ({
+            label,
+            data,
+            tension: 0.3,
+            fill: false,
+            borderWidth: 2
+          }))
+        },
+        options: {
+          responsive: true,
+          scales: {
+            x: { type: "time", time: { unit: "day" } },
+            y: { beginAtZero: true }
+          }
+        }
+      });
+    }
+
+    function applyFilters() {
+      const exercise = document.getElementById("filterExercise").value;
+      const from = document.getElementById("fromDate").value;
+      const to = document.getElementById("toDate").value;
+      renderTable(exercise, from, to);
+    }
+
+    function exportToCSV() {
+      const rows = [["Exercise", "Sets", "Reps", "Weight", "Date"]];
+      history.forEach(w => rows.push([w.exercise, w.sets, w.reps, w.weight, w.date]));
+      const csv = rows.map(r => r.join(",")).join("\n");
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "workout_history.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // Initial setup
+    updateExerciseList();
+    renderTable();
+    renderChart();
+  </script>
+</body>
+</html>
