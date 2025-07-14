@@ -201,7 +201,10 @@
     }
 
     // Initialize workouts from localStorage
-    let workouts = JSON.parse(localStorage.getItem('workouts')) || [];
+    let workouts = JSON.parse(localStorage.getItem('workouts'));
+    if (!Array.isArray(workouts)) {
+      workouts = []; // Default to empty array if invalid
+    }
     let editIndex = null;
 
     // Add exercise entry
