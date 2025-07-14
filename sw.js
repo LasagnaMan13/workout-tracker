@@ -5,11 +5,7 @@ self.addEventListener('install', (event) => {
         '/',
         '/index.html',
         '/manifest.json',
-        '/icon.png',
-        'https://cdn.jsdelivr.net/npm/chart.js',
-        'https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns',
-        'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js',
-        'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js'
+        '/icon.png'
       ]);
     })
   );
