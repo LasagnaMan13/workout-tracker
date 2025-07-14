@@ -3,7 +3,7 @@ self.addEventListener('install', (event) => {
     caches.open('v1').then((cache) => {
       return cache.addAll([
         '/',
-        '/workout_tracker_advanced.html',
+        '/index.html',
         '/manifest.json',
         '/icon.png',
         'https://cdn.jsdelivr.net/npm/chart.js',
