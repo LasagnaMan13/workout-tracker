@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Advanced Workout Tracker</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="icon.png" />
+  <meta name="theme-color" content="#3b82f6" />
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js"></script>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyAZYX7jrN8MIv3Pu7I79S1Qm8nyc0eyroc",
+      authDomain: "workout-tracker-130ff.firebaseapp.com",
+      projectId: "workout-tracker-130ff",
+      storageBucket: "workout-tracker-130ff.appspot.com",
+      messagingSenderId: "909959809525",
+      appId: "1:909959809525:web:7288e82e028313cd5f78bc",
+      databaseURL: "https://workout-tracker-130ff-default-rtdb.firebaseio.com"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+  </script>
+</head>
+<body>
+  <h1>Advanced Workout Tracker</h1>
+  <p>This is your cloud-connected, PWA-ready workout tracker app.</p>
+
+  <div>
+    <input id="exercise" placeholder="Exercise Name" />
+    <input id="sets" type="number" placeholder="Sets" />
+    <input id="reps" type="number" placeholder="Reps" />
+    <input id="weight" type="number" placeholder="Weight (lbs)" />
+    <button onclick="logWorkout()">Add Workout</button>
+  </div>
+
+  <div id="workoutLog"></div>
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js')
+        .then(() => console.log("Service Worker registered"))
+        .catch(err => console.error("SW registration failed:", err));
+    }
+
+    let workouts = [];
+
+    // Load workouts from Firebase on page load
+    db.ref("workouts").once("value").then(snapshot => {
+      const data = snapshot.val();
+      if (data) {
+        workouts = data;
+        renderWorkouts();
+      }
+    });
+
+    function saveWorkouts() {
+      db.ref("workouts").set(workouts);
+    }
+
+    function logWorkout() {
+      const name = document.getElementById("exercise").value;
+      const sets = parseInt(document.getElementById("sets").value);
+      const reps = parseInt(document.getElementById("reps").value);
+      const weight = parseInt(document.getElementById("weight").value);
+
+      if (!name || isNaN(sets) || isNaN(reps) || isNaN(weight)) {
+        alert("Please fill out all fields correctly.");
+        return;
+      }
+
+      const workout = {
+        date: new Date().toISOString(),
+        exercises: [{ name, sets, reps, weight }]
+      };
+
+      workouts.push(workout);
+      saveWorkouts();
+      renderWorkouts();
+    }
+
+    function renderWorkouts() {
+      const container = document.getElementById("workoutLog");
+      container.innerHTML = workouts.map(w => `
+        <div>
+          <strong>${new Date(w.date).toLocaleString()}</strong><br/>
+          ${w.exercises.map(e => `
+            ${e.name} - ${e.sets} sets x ${e.reps} reps @ ${e.weight} lbs
+          `).join("<br/>")}
+          <hr/>
+        </div>
+      `).join("");
+    }
+  </script>
+</body>
+</html>
