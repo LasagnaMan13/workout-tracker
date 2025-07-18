@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Advanced Workout Tracker</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="icon.png" />
+  <meta name="theme-color" content="#3b82f6" />
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 2rem;
+      background: #f9f9f9;
+      color: #333;
+    }
+    h1 {
+      color: #2c3e50;
+    }
+    form {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    input, button {
+      padding: 10px;
+      font-size: 1rem;
+    }
+    #workoutLog {
+      margin-top: 20px;
+    }
+    .log-entry {
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 10px;
+    }
+    canvas {
+      max-width: 100%;
+      background: white;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Advanced Workout Tracker</h1>
+
+  <form id="workout-form" onsubmit="event.preventDefault(); logWorkout();">
+    <input id="exercise" placeholder="Exercise Name" required />
+    <input id="sets" type="number" placeholder="Sets" required />
+    <input id="reps" type="number" placeholder="Reps" required />
+    <input id="weight" type="number" placeholder="Weight (lbs)" required />
+    <button type="submit">Add Workout</button>
+  </form>
+
+  <h2>Personal Records</h2>
+  <ul id="prList"></ul>
+
+  <h2>Workout Progress Chart</h2>
+  <select id="exerciseFilter" onchange="renderChart()"></select>
+  <canvas id="progressChart" height="200"></canvas>
+
+  <h2>Workout History</h2>
+  <div id="workoutLog"></div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyAZYX7jrN8MIv3Pu7I79S1Qm8nyc0eyroc",
+      authDomain: "workout-tracker-130ff.firebaseapp.com",
+      projectId: "workout-tracker-130ff",
+      storageBucket: "workout-tracker-130ff.appspot.com",
+      messagingSenderId: "909959809525",
+      appId: "1:909959809525:web:7288e82e028313cd5f78bc",
+      databaseURL: "https://workout-tracker-130ff-default-rtdb.firebaseio.com"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js')
+        .then(() => console.log("Service Worker registered"))
+        .catch(err => console.error("SW registration failed:", err));
+    }
+
+    let workouts = [];
+
+    db.ref("workouts").once("value").then(snapshot => {
+      const data = snapshot.val();
+      if (data) {
+        workouts = data;
+        renderWorkouts();
+        updatePRs();
+        populateExerciseFilter();
+        renderChart();
+      }
+    });
+
+    function saveWorkouts() {
+      db.ref("workouts").set(workouts);
+    }
+
+    function logWorkout() {
+      const name = document.getElementById("exercise").value;
+      const sets = parseInt(document.getElementById("sets").value);
+      const reps = parseInt(document.getElementById("reps").value);
+      const weight = parseInt(document.getElementById("weight").value);
+
+      const workout = {
+        date: new Date().toISOString(),
+        exercises: [{ name, sets, reps, weight }]
+      };
+
+      workouts.push(workout);
+      saveWorkouts();
+      renderWorkouts();
+      updatePRs();
+      populateExerciseFilter();
+      renderChart();
+      document.getElementById("workout-form").reset();
+    }
+
+    function renderWorkouts() {
+      const container = document.getElementById("workoutLog");
+      container.innerHTML = workouts.map(w => `
+        <div class="log-entry">
+          <strong>${new Date(w.date).toLocaleString()}</strong><br/>
+          ${w.exercises.map(e => `
+            ${e.name} - ${e.sets} sets x ${e.reps} reps @ ${e.weight} lbs
+          `).join("<br/>")}
+        </div>
+      `).join("");
+    }
+
+    function updatePRs() {
+      const prMap = {};
+      workouts.forEach(w => {
+        w.exercises.forEach(e => {
+          if (!prMap[e.name] || e.weight > prMap[e.name]) {
+            prMap[e.name] = e.weight;
+          }
+        });
+      });
+      const prList = document.getElementById("prList");
+      prList.innerHTML = Object.entries(prMap).map(
+        ([name, weight]) => `<li>${name}: ${weight} lbs</li>`
+      ).join("");
+    }
+
+    function populateExerciseFilter() {
+      const dropdown = document.getElementById("exerciseFilter");
+      const allExercises = new Set();
+      workouts.forEach(w => w.exercises.forEach(e => allExercises.add(e.name)));
+      dropdown.innerHTML = [...allExercises].map(name => `<option value="${name}">${name}</option>`).join("");
+    }
+
+    function renderChart() {
+      const selected = document.getElementById("exerciseFilter").value;
+      const dataPoints = [];
+
+      workouts.forEach(w => {
+        w.exercises.forEach(e => {
+          if (e.name === selected) {
+            dataPoints.push({ x: new Date(w.date), y: e.weight });
+          }
+        });
+      });
+
+      const ctx = document.getElementById("progressChart").getContext("2d");
+      if (window.myChart) window.myChart.destroy();
+      window.myChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          datasets: [{
+            label: `${selected} Weight Progress`,
+            data: dataPoints,
+            borderWidth: 2,
+            fill: false,
+            borderColor: 'blue'
+          }]
+        },
+        options: {
+          scales: {
+            x: { type: 'time', time: { unit: 'day' } },
+            y: { beginAtZero: true }
+          }
+        }
+      });
+    }
+  </script>
+</body>
+</html>
